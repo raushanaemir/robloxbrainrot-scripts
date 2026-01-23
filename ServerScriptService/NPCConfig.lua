@@ -38,6 +38,13 @@ NPCConfig.brainrotTypes = {
 		rarity = "Common",
 		walkSpeed = 4,
 		followSpeed = 16,
+		basePrice = 100,
+		coinsPerSecond = 2, -- <<<<<<<< Example: Dummy gives 2 cps
+		effect = {
+			walkSpeedBonus = 20,
+			jumpPowerBonus = 50,
+			description = "Faster walkspeed"
+		}
 	},
 	{
 		modelName = "TripleT",
@@ -46,6 +53,13 @@ NPCConfig.brainrotTypes = {
 		rarity = "Legendary",
 		walkSpeed = 4,
 		followSpeed = 16,
+		basePrice = 500,
+		coinsPerSecond = 5, -- <<<<<<<< Example: TripleT gives 5 cps
+		effect = {
+			walkSpeedBonus = 8,
+			jumpPowerBonus = 25,
+			description = "Higher jump"
+		}
 	}
 }
 
@@ -57,33 +71,37 @@ NPCConfig.statuses = {
 	{
 		name = "Diamond",
 		displayText = "(DIAMOND)",
-		color = Color3.fromRGB(19, 235, 255), -- Blue
-		chance = 5, -- 5% of ALL brainrots
-		hueShift = true, -- Will tint the model
-		tintColor = Color3.fromRGB(100, 200, 255) -- Cyan-blue tint
+		color = Color3.fromRGB(19, 235, 255),
+		chance = 5,
+		hueShift = true,
+		tintColor = Color3.fromRGB(100, 200, 255),
+		priceMultiplier = 3.0,
 	},
 	{
 		name = "Gold",
 		displayText = "(GOLD)",
-		color = Color3.fromRGB(255, 200, 0), -- Yellow
-		chance = 10, -- 10% of ALL brainrots
+		color = Color3.fromRGB(255, 200, 0),
+		chance = 10,
 		hueShift = true,
-		tintColor = Color3.fromRGB(255, 220, 100) -- Golden tint
+		tintColor = Color3.fromRGB(255, 220, 100),
+		priceMultiplier = 2.0,
 	},
 	{
 		name = "Shiny",
 		displayText = "(SHINY)",
-		color = Color3.fromRGB(255, 41, 226), -- Pink
-		chance = 35, -- 3% - super rare!
+		color = Color3.fromRGB(255, 41, 226),
+		chance = 35,
 		hueShift = true,
-		tintColor = Color3.fromRGB(240, 34, 255) -- Pink-purple tint
+		tintColor = Color3.fromRGB(240, 34, 255),
+		priceMultiplier = 1.5,
 	},
 	{
 		name = "None",
 		displayText = "",
-		color = Color3.fromRGB(85, 255, 127), -- Green (default)
-		chance = 50, -- Rest are normal (100 - 5 - 10 - 3 = 82)
-		hueShift = false
+		color = Color3.fromRGB(85, 255, 127),
+		chance = 50,
+		hueShift = false,
+		priceMultiplier = 1.0,
 	}
 }
 
@@ -175,6 +193,21 @@ function NPCConfig.applyStatusVisuals(npc, status)
 			sparkle.Parent = rootPart
 		end
 	end
+end
+
+function NPCConfig.calculatePrice(brainrotType, status)
+	local basePrice = brainrotType.basePrice or 100
+	local multiplier = 1.0
+
+	if status and status.priceMultiplier then
+		multiplier = status.priceMultiplier
+	end
+
+	return math.floor(basePrice * multiplier)
+end
+
+function NPCConfig.getTypeEffect(brainrotType)
+	return brainrotType.effect or {walkSpeedBonus = 0, jumpPowerBonus = 0, description = ""}
 end
 
 return NPCConfig

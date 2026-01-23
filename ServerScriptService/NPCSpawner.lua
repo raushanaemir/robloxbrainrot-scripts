@@ -74,11 +74,21 @@ task.spawn(function()
 		npc:SetAttribute("Rarity", brainrotType.rarity)
 		npc:SetAttribute("WalkSpeed", brainrotType.walkSpeed)
 		npc:SetAttribute("FollowSpeed", brainrotType.followSpeed)
+		
+		local npcPrice = NPCConfig.calculatePrice(brainrotType, status)
+		npc:SetAttribute("Price", npcPrice)
+
+		-- Store effect info for later use
+		if brainrotType.effect then
+			npc:SetAttribute("Effect_WalkSpeedBonus", brainrotType.effect.walkSpeedBonus or 0)
+			npc:SetAttribute("Effect_JumpPowerBonus", brainrotType.effect.jumpPowerBonus or 0)
+			npc:SetAttribute("Effect_Description", brainrotType.effect.description or "")
+		end
 
 		-- Create custom name display with BillboardGui
 		local billboard = Instance.new("BillboardGui")
 		billboard.Name = "NameDisplay"
-		billboard.Size = UDim2.new(0, 300, 0, 72)
+		billboard.Size = UDim2.new(0, 300, 0, 120)
 		billboard.StudsOffset = Vector3.new(0, 5, 0)
 		billboard.AlwaysOnTop = true
 		billboard.Parent = rootPart
@@ -90,8 +100,8 @@ task.spawn(function()
 
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "NameLabel"
-		nameLabel.Size = UDim2.new(1, 0, 0.28, 0)
-		nameLabel.Position = UDim2.new(0, 0, 0, -6)
+		nameLabel.Size = UDim2.new(1, 0, 0.2, 0)
+		nameLabel.Position = UDim2.new(0, 0, 0, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.Font = Enum.Font.GothamBold
 		nameLabel.TextSize = 22
@@ -106,11 +116,14 @@ task.spawn(function()
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 		nameLabel.Parent = container
 
-		if status.displayText ~= "" then
-			local statusLabel = Instance.new("TextLabel")
+		local hasStatus = status.displayText ~= ""
+
+		local statusLabel
+		if hasStatus then
+			statusLabel = Instance.new("TextLabel")
 			statusLabel.Name = "StatusLabel"
-			statusLabel.Size = UDim2.new(1, 0, 0.32, 0)
-			statusLabel.Position = UDim2.new(0, 0, 0.3, -4)
+			statusLabel.Size = UDim2.new(1, 0, 0.2, 0)
+			statusLabel.Position = UDim2.new(0, 0, 0.2, 0)
 			statusLabel.BackgroundTransparency = 1
 			statusLabel.Font = Enum.Font.GothamBold
 			statusLabel.TextSize = 18
@@ -124,17 +137,45 @@ task.spawn(function()
 
 		local infoFrame = Instance.new("Frame")
 		infoFrame.Name = "InfoRow"
-		infoFrame.Size = UDim2.new(1, 0, 0.34, 0)
-		infoFrame.Position = UDim2.new(0, 0, 0.6, -2)
+		infoFrame.Size = UDim2.new(1, 0, 0.4, 0)
+		infoFrame.Position = hasStatus and UDim2.new(0, 0, 0.4, 0) or UDim2.new(0, 0, 0.2, 0)
 		infoFrame.BackgroundTransparency = 1
 		infoFrame.Parent = container
 
 		local infoLayout = Instance.new("UIListLayout")
 		infoLayout.Parent = infoFrame
-		infoLayout.FillDirection = Enum.FillDirection.Horizontal
+		infoLayout.FillDirection = Enum.FillDirection.Vertical
 		infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		infoLayout.Padding = UDim.new(0, 4)
+		infoLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+		infoLayout.Padding = UDim.new(0, 2)
+
+		-- Price label (add first so it appears on top)
+		local priceLabel = Instance.new("TextLabel")
+		priceLabel.Name = "PriceLabel"
+		priceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		priceLabel.BackgroundTransparency = 1
+		priceLabel.Font = Enum.Font.GothamBold
+		priceLabel.TextSize = 14
+		priceLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+		priceLabel.TextStrokeTransparency = 0
+		priceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		priceLabel.Text = npcPrice .. " Coins"
+		priceLabel.TextXAlignment = Enum.TextXAlignment.Center
+		priceLabel.Parent = infoFrame
+
+		-- CPS label (add second so it appears below price)
+		local cpsLabel = Instance.new("TextLabel")
+		cpsLabel.Name = "CPSLabel"
+		cpsLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		cpsLabel.BackgroundTransparency = 1
+		cpsLabel.Font = Enum.Font.GothamBold
+		cpsLabel.TextSize = 14
+		cpsLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+		cpsLabel.TextStrokeTransparency = 0
+		cpsLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		cpsLabel.Text = tostring(brainrotType.coinsPerSecond or 0) .. " coins/s"
+		cpsLabel.TextXAlignment = Enum.TextXAlignment.Center
+		cpsLabel.Parent = infoFrame
 
 		-- Hide default humanoid display
 		humanoid.DisplayName = ""
@@ -213,7 +254,19 @@ task.spawn(function()
 		buyPrompt.HoldDuration = 1.0
 		buyPrompt.MaxActivationDistance = 10
 		buyPrompt.RequiresLineOfSight = false
+		buyPrompt.KeyboardKeyCode = Enum.KeyCode.E -- Set E for buy
 		buyPrompt.Parent = rootPart
+
+		-- Info prompt for Q (place after buyPrompt so they appear next to each other)
+		local infoPrompt = Instance.new("ProximityPrompt")
+		infoPrompt.Name = "InfoPrompt"
+		infoPrompt.ActionText = "Show Info"
+		infoPrompt.ObjectText = displayName
+		infoPrompt.HoldDuration = 0
+		infoPrompt.MaxActivationDistance = 10
+		infoPrompt.KeyboardKeyCode = Enum.KeyCode.Q -- Set Q for info
+		infoPrompt.RequiresLineOfSight = false
+		infoPrompt.Parent = rootPart
 
 		local stealPrompt = Instance.new("ProximityPrompt")
 		stealPrompt.Name = "StealPrompt"
@@ -246,6 +299,13 @@ task.spawn(function()
 		unequipPrompt.RequiresLineOfSight = false
 		unequipPrompt.Enabled = false
 		unequipPrompt.Parent = rootPart
+
+		-- Set info attributes for client GUI
+		npc:SetAttribute("Info_Name", displayName)
+		npc:SetAttribute("Info_Rarity", brainrotType.rarity)
+		npc:SetAttribute("Info_Price", npcPrice)
+		npc:SetAttribute("Info_Effect", (brainrotType.effect and brainrotType.effect.description) or "")
+		npc:SetAttribute("Info_CPS", brainrotType.coinsPerSecond or 0) -- <<<<<< ADD THIS LINE
 
 		-- Network ownership to server
 		for _, part in ipairs(npc:GetDescendants()) do
