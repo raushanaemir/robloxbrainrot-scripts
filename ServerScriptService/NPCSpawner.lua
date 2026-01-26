@@ -8,7 +8,6 @@ local PhysicsService = game:GetService("PhysicsService")
 local PathfindingService = game:GetService("PathfindingService")
 
 local startPoint = Workspace:WaitForChild("StartPoint")
-local endPoint = Workspace:WaitForChild("EndPoint")
 
 print("=== NPC SPAWNER & BEHAVIOR LOADED ===")
 
@@ -62,9 +61,28 @@ task.spawn(function()
 			humanoid.Health = math.huge
 		end)
 
+		-- === Load and assign animations from NPCConfig ===
+		if brainrotType.idleAnimationId then
+			local idleAnim = Instance.new("Animation")
+			idleAnim.Name = "IdleAnimation"
+			idleAnim.AnimationId = brainrotType.idleAnimationId
+			idleAnim.Parent = npc
+			npc:SetAttribute("IdleAnimationId", brainrotType.idleAnimationId)
+		end
+		if brainrotType.walkAnimationId then
+			local walkAnim = Instance.new("Animation")
+			walkAnim.Name = "WalkAnimation"
+			walkAnim.AnimationId = brainrotType.walkAnimationId
+			walkAnim.Parent = npc
+			npc:SetAttribute("WalkAnimationId", brainrotType.walkAnimationId)
+		end
+
 		-- Get random status (universal - works for ANY brainrot!)
 		local status = NPCConfig.getRandomStatus()
 		local rarityInfo = NPCConfig.getRarityInfo(brainrotType.rarity)
+
+		-- Use coins/s with status multiplier (pass the full status table!)
+		local coinsPerSecond = NPCConfig.getCoinsPerSecond(brainrotType, status)
 
 		-- Set attributes (support both lowercase/capital keys from config
 
@@ -74,7 +92,7 @@ task.spawn(function()
 		npc:SetAttribute("Rarity", brainrotType.rarity)
 		npc:SetAttribute("WalkSpeed", brainrotType.walkSpeed)
 		npc:SetAttribute("FollowSpeed", brainrotType.followSpeed)
-		
+
 		local npcPrice = NPCConfig.calculatePrice(brainrotType, status)
 		npc:SetAttribute("Price", npcPrice)
 
@@ -85,12 +103,38 @@ task.spawn(function()
 			npc:SetAttribute("Effect_Description", brainrotType.effect.description or "")
 		end
 
-		-- Create custom name display with BillboardGui
+		-- Calculate model height for billboard positioning
+		local modelHeight = 0
+		-- Fallback: find highest point relative to rootPart
+		for _, part in ipairs(npc:GetDescendants()) do
+			if part:IsA("BasePart") then
+				local topY = (part.Position.Y + part.Size.Y / 2) - rootPart.Position.Y
+				if topY > modelHeight then
+					modelHeight = topY
+				end
+			end
+		end
+		-- Place the billboard way above the model (much higher than before)
+		local billboardOffset = modelHeight + 3
+		-- Create an Attachment on the rootPart so the billboard stays a fixed position above the model
+		local attach = rootPart:FindFirstChild("NameDisplayAttachment")
+		if not attach then
+			attach = Instance.new("Attachment")
+			attach.Name = "NameDisplayAttachment"
+			attach.Parent = rootPart
+		end
+		attach.Position = Vector3.new(0, billboardOffset, 0)
+
+		-- Common text size for all labels (fixed size, not scaled)
+		local TEXT_SIZE = 20
+
+		-- Create custom name display with BillboardGui attached to the attachment
 		local billboard = Instance.new("BillboardGui")
 		billboard.Name = "NameDisplay"
-		billboard.Size = UDim2.new(0, 300, 0, 120)
-		billboard.StudsOffset = Vector3.new(0, 5, 0)
-		billboard.AlwaysOnTop = true
+		billboard.Size = UDim2.new(8, 0, 4, 0) -- Bigger overall
+		billboard.AlwaysOnTop = false
+		billboard.MaxDistance = 50
+		billboard.Adornee = attach
 		billboard.Parent = rootPart
 
 		local container = Instance.new("Frame")
@@ -98,13 +142,22 @@ task.spawn(function()
 		container.BackgroundTransparency = 1
 		container.Parent = billboard
 
+		-- UIListLayout for vertical stacking
+		local layout = Instance.new("UIListLayout")
+		layout.Parent = container
+		layout.FillDirection = Enum.FillDirection.Vertical
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		layout.VerticalAlignment = Enum.VerticalAlignment.Top
+		layout.Padding = UDim.new(0, 2) -- Reduced padding
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+		-- 1. Name label
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "NameLabel"
-		nameLabel.Size = UDim2.new(1, 0, 0.2, 0)
-		nameLabel.Position = UDim2.new(0, 0, 0, 0)
+		nameLabel.Size = UDim2.new(1, 0, 0.28, 0) -- Bigger
 		nameLabel.BackgroundTransparency = 1
-		nameLabel.Font = Enum.Font.GothamBold
-		nameLabel.TextSize = 22
+		nameLabel.Font = Enum.Font.GothamBlack
+		nameLabel.TextScaled = true
 		nameLabel.TextColor3 = rarityInfo.color
 		nameLabel.TextStrokeTransparency = 0
 		nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -114,68 +167,80 @@ task.spawn(function()
 			and (rarityInfo.displayText .. " " .. displayName)
 			or displayName
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+		nameLabel.LayoutOrder = 1
 		nameLabel.Parent = container
 
+		-- 2. Status label (if any)
 		local hasStatus = status.displayText ~= ""
-
 		local statusLabel
 		if hasStatus then
 			statusLabel = Instance.new("TextLabel")
 			statusLabel.Name = "StatusLabel"
-			statusLabel.Size = UDim2.new(1, 0, 0.2, 0)
-			statusLabel.Position = UDim2.new(0, 0, 0.2, 0)
+			statusLabel.Size = UDim2.new(1, 0, 0.18, 0)
 			statusLabel.BackgroundTransparency = 1
-			statusLabel.Font = Enum.Font.GothamBold
-			statusLabel.TextSize = 18
+			statusLabel.Font = Enum.Font.GothamBlack
+			statusLabel.TextScaled = true
 			statusLabel.TextStrokeTransparency = 0
 			statusLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 			statusLabel.Text = status.displayText
-			statusLabel.TextColor3 = status.color
 			statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+			statusLabel.LayoutOrder = 2
 			statusLabel.Parent = container
+
+			-- Rainbow status: animate label color
+			if status.isRainbow then
+				coroutine.wrap(function(lbl)
+					while lbl.Parent do
+						local t = tick()
+						local r = 0.5 + 0.5 * math.sin(t * 2)
+						local g = 0.5 + 0.5 * math.sin(t * 2 + 2)
+						local b = 0.5 + 0.5 * math.sin(t * 2 + 4)
+						lbl.TextColor3 = Color3.new(r, g, b)
+						wait(0.03)
+					end
+				end)(statusLabel)
+			else
+				statusLabel.TextColor3 = status.color
+			end
 		end
 
-		local infoFrame = Instance.new("Frame")
-		infoFrame.Name = "InfoRow"
-		infoFrame.Size = UDim2.new(1, 0, 0.4, 0)
-		infoFrame.Position = hasStatus and UDim2.new(0, 0, 0.4, 0) or UDim2.new(0, 0, 0.2, 0)
-		infoFrame.BackgroundTransparency = 1
-		infoFrame.Parent = container
+		-- 3. Coins/s label
+		local cpsLabel = Instance.new("TextLabel")
+		cpsLabel.Name = "CPSLabel"
+		cpsLabel.Size = UDim2.new(1, 0, 0.18, 0)
+		cpsLabel.BackgroundTransparency = 1
+		cpsLabel.Font = Enum.Font.GothamBlack
+		cpsLabel.TextScaled = true
+		cpsLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+		cpsLabel.TextStrokeTransparency = 0
+		cpsLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		cpsLabel.Text = tostring(coinsPerSecond) .. " coins/s"
+		cpsLabel.TextXAlignment = Enum.TextXAlignment.Center
+		cpsLabel.LayoutOrder = 3
+		cpsLabel.Parent = container
 
-		local infoLayout = Instance.new("UIListLayout")
-		infoLayout.Parent = infoFrame
-		infoLayout.FillDirection = Enum.FillDirection.Vertical
-		infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		infoLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-		infoLayout.Padding = UDim.new(0, 2)
+		-- 4. Spacer (empty line)
+		local spacer = Instance.new("Frame")
+		spacer.Name = "Spacer"
+		spacer.Size = UDim2.new(1, 0, 0.10, 0)
+		spacer.BackgroundTransparency = 1
+		spacer.LayoutOrder = 4
+		spacer.Parent = container
 
-		-- Price label (add first so it appears on top)
+		-- 5. Price label
 		local priceLabel = Instance.new("TextLabel")
 		priceLabel.Name = "PriceLabel"
-		priceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		priceLabel.Size = UDim2.new(1, 0, 0.18, 0) -- Bigger
 		priceLabel.BackgroundTransparency = 1
-		priceLabel.Font = Enum.Font.GothamBold
-		priceLabel.TextSize = 14
+		priceLabel.Font = Enum.Font.GothamBlack
+		priceLabel.TextScaled = true
 		priceLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 		priceLabel.TextStrokeTransparency = 0
 		priceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 		priceLabel.Text = npcPrice .. " Coins"
 		priceLabel.TextXAlignment = Enum.TextXAlignment.Center
-		priceLabel.Parent = infoFrame
-
-		-- CPS label (add second so it appears below price)
-		local cpsLabel = Instance.new("TextLabel")
-		cpsLabel.Name = "CPSLabel"
-		cpsLabel.Size = UDim2.new(1, 0, 0.5, 0)
-		cpsLabel.BackgroundTransparency = 1
-		cpsLabel.Font = Enum.Font.GothamBold
-		cpsLabel.TextSize = 14
-		cpsLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-		cpsLabel.TextStrokeTransparency = 0
-		cpsLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-		cpsLabel.Text = tostring(brainrotType.coinsPerSecond or 0) .. " coins/s"
-		cpsLabel.TextXAlignment = Enum.TextXAlignment.Center
-		cpsLabel.Parent = infoFrame
+		priceLabel.LayoutOrder = 5
+		priceLabel.Parent = container
 
 		-- Hide default humanoid display
 		humanoid.DisplayName = ""
@@ -257,17 +322,6 @@ task.spawn(function()
 		buyPrompt.KeyboardKeyCode = Enum.KeyCode.E -- Set E for buy
 		buyPrompt.Parent = rootPart
 
-		-- Info prompt for Q (place after buyPrompt so they appear next to each other)
-		local infoPrompt = Instance.new("ProximityPrompt")
-		infoPrompt.Name = "InfoPrompt"
-		infoPrompt.ActionText = "Show Info"
-		infoPrompt.ObjectText = displayName
-		infoPrompt.HoldDuration = 0
-		infoPrompt.MaxActivationDistance = 10
-		infoPrompt.KeyboardKeyCode = Enum.KeyCode.Q -- Set Q for info
-		infoPrompt.RequiresLineOfSight = false
-		infoPrompt.Parent = rootPart
-
 		local stealPrompt = Instance.new("ProximityPrompt")
 		stealPrompt.Name = "StealPrompt"
 		stealPrompt.ActionText = "Steal"
@@ -305,7 +359,7 @@ task.spawn(function()
 		npc:SetAttribute("Info_Rarity", brainrotType.rarity)
 		npc:SetAttribute("Info_Price", npcPrice)
 		npc:SetAttribute("Info_Effect", (brainrotType.effect and brainrotType.effect.description) or "")
-		npc:SetAttribute("Info_CPS", brainrotType.coinsPerSecond or 0) -- <<<<<< ADD THIS LINE
+		npc:SetAttribute("Info_CPS", coinsPerSecond) -- Always use the correct value
 
 		-- Network ownership to server
 		for _, part in ipairs(npc:GetDescendants()) do

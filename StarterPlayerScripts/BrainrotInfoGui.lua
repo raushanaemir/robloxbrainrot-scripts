@@ -1,6 +1,7 @@
 -- Brainrot Info GUI LocalScript
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -12,8 +13,8 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 400, 0, 280) -- Increased height from 200 to 280
-frame.Position = UDim2.new(0.5, -200, 0.5, -140)
+frame.Size = UDim2.new(0, 400, 0, 310) -- Increased height for stacked layout
+frame.Position = UDim2.new(0.5, -200, 0.5, -155)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.15
 frame.BorderSizePixel = 0
@@ -81,43 +82,33 @@ statusLabel.TextWrapped = true
 statusLabel.Text = "Status: "
 statusLabel.Parent = frame
 
--- Price and CPS container (horizontal layout)
-local priceAndCpsFrame = Instance.new("Frame")
-priceAndCpsFrame.Size = UDim2.new(1, -20, 0, 28)
-priceAndCpsFrame.Position = UDim2.new(0, 10, 0, 128)
-priceAndCpsFrame.BackgroundTransparency = 1
-priceAndCpsFrame.Parent = frame
-
-local priceAndCpsLayout = Instance.new("UIListLayout")
-priceAndCpsLayout.FillDirection = Enum.FillDirection.Horizontal
-priceAndCpsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-priceAndCpsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-priceAndCpsLayout.Padding = UDim.new(0, 20)
-priceAndCpsLayout.Parent = priceAndCpsFrame
-
+-- Price label (now stacked vertically)
 local priceLabel = Instance.new("TextLabel")
-priceLabel.Size = UDim2.new(0, 150, 0, 28)
+priceLabel.Size = UDim2.new(1, -20, 0, 28)
+priceLabel.Position = UDim2.new(0, 10, 0, 128)
 priceLabel.BackgroundTransparency = 1
 priceLabel.Font = Enum.Font.GothamBold
-priceLabel.TextSize = 16
+priceLabel.TextSize = 18
 priceLabel.TextColor3 = Color3.fromRGB(255, 255, 180)
 priceLabel.TextXAlignment = Enum.TextXAlignment.Left
 priceLabel.Text = "Price: "
-priceLabel.Parent = priceAndCpsFrame
+priceLabel.Parent = frame
 
+-- CPS label (below price, same font size)
 local cpsLabel = Instance.new("TextLabel")
-cpsLabel.Size = UDim2.new(0, 150, 0, 28)
+cpsLabel.Size = UDim2.new(1, -20, 0, 28)
+cpsLabel.Position = UDim2.new(0, 10, 0, 156)
 cpsLabel.BackgroundTransparency = 1
 cpsLabel.Font = Enum.Font.GothamBold
-cpsLabel.TextSize = 16
+cpsLabel.TextSize = 18
 cpsLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 cpsLabel.TextXAlignment = Enum.TextXAlignment.Left
 cpsLabel.Text = "Coins/sec: "
-cpsLabel.Parent = priceAndCpsFrame
+cpsLabel.Parent = frame
 
 local effectLabel = Instance.new("TextLabel")
 effectLabel.Size = UDim2.new(1, -20, 0, 56) -- Increased height for wrapping
-effectLabel.Position = UDim2.new(0, 10, 0, 156)
+effectLabel.Position = UDim2.new(0, 10, 0, 184)
 effectLabel.BackgroundTransparency = 1
 effectLabel.Font = Enum.Font.GothamBold
 effectLabel.TextSize = 14 -- Reduced from 20
@@ -167,7 +158,43 @@ local function getStatusColor(status)
 	end
 end
 
--- Proximity check
+-- Function to display NPC info
+local function displayNPCInfo(npc)
+	if not npc or not npc.Parent then return end
+	
+	-- Get info attributes with multiple fallbacks
+	local infoName = npc:GetAttribute("Info_Name") 
+		or npc:GetAttribute("DisplayName") 
+		or npc:GetAttribute("NPCType")
+		or "Unknown"
+	local infoRarity = npc:GetAttribute("Info_Rarity") 
+		or npc:GetAttribute("Rarity") 
+		or "Unknown"
+	local infoPrice = npc:GetAttribute("Info_Price") 
+		or npc:GetAttribute("Price") 
+		or "???"
+	local infoEffect = npc:GetAttribute("Info_Effect") 
+		or npc:GetAttribute("Effect_Description") 
+		or "None"
+	local infoStatus = npc:GetAttribute("Status") or "None"
+	local infoCPS = npc:GetAttribute("Info_CPS") or 0
+
+	nameLabel.Text = "Name: " .. tostring(infoName)
+	rarityLabel.Text = "Rarity: " .. tostring(infoRarity)
+	rarityLabel.TextColor3 = getRarityColor(infoRarity)
+	statusLabel.Text = "Status: " .. tostring(infoStatus)
+	statusLabel.TextColor3 = getStatusColor(infoStatus)
+	priceLabel.Text = "Price: $" .. tostring(infoPrice)
+	cpsLabel.Text = "Coins/sec: " .. tostring(infoCPS)
+	effectLabel.Text = "Effect: " .. tostring(infoEffect)
+
+	currentTargetNPC = npc
+	frame.Visible = true
+	
+	print("Displaying info for: " .. tostring(infoName))
+end
+
+-- Proximity check for auto-close
 RunService.RenderStepped:Connect(function()
 	if frame.Visible and currentTargetNPC and currentTargetNPC.Parent then
 		local primary = currentTargetNPC.PrimaryPart or currentTargetNPC:FindFirstChild("HumanoidRootPart") or currentTargetNPC:FindFirstChildWhichIsA("BasePart")
@@ -181,55 +208,29 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- Listen for InfoPrompt.Triggered on any NPC
-local function onDescendantAdded(desc)
-	if desc:IsA("ProximityPrompt") and desc.Name == "InfoPrompt" then
-		desc.Triggered:Connect(function()
-			local npc = desc.Parent and desc.Parent.Parent
-			if not npc then return end
-
-			-- Get info attributes
-			local infoName = npc:GetAttribute("Info_Name") or "Unknown"
-			local infoRarity = npc:GetAttribute("Info_Rarity") or "Unknown"
-			local infoPrice = npc:GetAttribute("Info_Price") or "???"
-			local infoEffect = npc:GetAttribute("Info_Effect") or "None"
-			local infoStatus = npc:GetAttribute("Status") or "None"
-			local infoCPS = npc:GetAttribute("Info_CPS") or 0
-
-			nameLabel.Text = "Name: " .. tostring(infoName)
-			rarityLabel.Text = "Rarity: " .. tostring(infoRarity)
-			rarityLabel.TextColor3 = getRarityColor(infoRarity)
-			statusLabel.Text = "Status: " .. tostring(infoStatus)
-			statusLabel.TextColor3 = getStatusColor(infoStatus)
-			priceLabel.Text = "Price: $" .. tostring(infoPrice)
-			cpsLabel.Text = "Coins/sec: " .. tostring(infoCPS)
-			effectLabel.Text = "Effect: " .. tostring(infoEffect)
-
-			currentTargetNPC = npc
-			frame.Visible = true
-		end)
+-- Listen for display requests from InteractMenu via BindableEvent
+local function setupDisplayEvent()
+	local displayEvent = ReplicatedStorage:FindFirstChild("DisplayBrainrotInfo")
+	if not displayEvent then
+		displayEvent = Instance.new("BindableEvent")
+		displayEvent.Name = "DisplayBrainrotInfo"
+		displayEvent.Parent = ReplicatedStorage
 	end
+	
+	displayEvent.Event:Connect(function(npc)
+		if npc then
+			displayNPCInfo(npc)
+		end
+	end)
 end
 
--- Scan for existing InfoPrompts
-for _, npc in ipairs(workspace:GetDescendants()) do
-	if npc:IsA("ProximityPrompt") and npc.Name == "InfoPrompt" then
-		onDescendantAdded(npc)
-	end
-end
+setupDisplayEvent()
 
--- Listen for new InfoPrompts
-workspace.DescendantAdded:Connect(onDescendantAdded)
-
--- Hide GUI on click or Q press
-frame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		closeGui()
-	end
-end)
-
+-- Hide GUI on Escape press (removed Q key info display functionality)
 UIS.InputBegan:Connect(function(input, processed)
-	if not processed and frame.Visible and input.KeyCode == Enum.KeyCode.Q then
+	if not processed and frame.Visible and input.KeyCode == Enum.KeyCode.Escape then
 		closeGui()
 	end
 end)
+
+print("Brainrot Info GUI Loaded!")

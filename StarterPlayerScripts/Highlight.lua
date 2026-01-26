@@ -14,13 +14,30 @@ local function setupNPC(npc)
 	if not rootPart then return end
 
 	-- Wait for steal prompt with better error handling
-	local stealPrompt = rootPart:FindFirstChild("StealPrompt")
+	-- Check interactPromptAnchor first since that's where StealPrompt lives now
+	local interactPromptAnchor = npc:FindFirstChild("InteractPromptAnchor")
+	local stealPrompt = nil
+	
+	if interactPromptAnchor then
+		stealPrompt = interactPromptAnchor:FindFirstChild("StealPrompt")
+	end
+	
+	if not stealPrompt then
+		stealPrompt = rootPart:FindFirstChild("StealPrompt")
+	end
+	
 	if not stealPrompt then
 		-- If prompt doesn't exist yet, wait for it
 		local timeout = 0
 		while not stealPrompt and timeout < 50 do
 			task.wait(0.1)
-			stealPrompt = rootPart:FindFirstChild("StealPrompt")
+			interactPromptAnchor = npc:FindFirstChild("InteractPromptAnchor")
+			if interactPromptAnchor then
+				stealPrompt = interactPromptAnchor:FindFirstChild("StealPrompt")
+			end
+			if not stealPrompt then
+				stealPrompt = rootPart:FindFirstChild("StealPrompt")
+			end
 			timeout = timeout + 1
 		end
 

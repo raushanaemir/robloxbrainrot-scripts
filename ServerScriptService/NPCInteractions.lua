@@ -43,141 +43,98 @@ local function enableAutoJump(npc, humanoid, rootPart)
 	end)
 end
 
+local TEXT_SIZE = 18 -- same consistent size
 
 local function updateNameDisplay(npc, rootPart, ownerName)
+	-- Find billboard on rootPart
 	local billboard = rootPart:FindFirstChild("NameDisplay")
-	if not billboard then return end
 
-	billboard.Size = UDim2.new(0, 300, 0, 120)
-	billboard.StudsOffset = Vector3.new(0, 5, 0)
+	if not billboard then return end
 
 	local container = billboard:FindFirstChildOfClass("Frame")
 	if not container then return end
 
 	local nameLabel = container:FindFirstChild("NameLabel")
 	local statusLabel = container:FindFirstChild("StatusLabel")
-	local priceCPSFrame = container:FindFirstChild("PriceCPSFrame")
+	local cpsLabel = container:FindFirstChild("CPSLabel")
+	local spacer = container:FindFirstChild("Spacer")
+	local priceLabel = container:FindFirstChild("PriceLabel")
 	local status = npc:GetAttribute("Status")
 
 	local NPCConfig = require(script.Parent.Parent.NPCConfig)
 	local rarity = npc:GetAttribute("Rarity") or "Common"
 	local rarityInfo = NPCConfig.getRarityInfo(rarity)
 
+	local displayName = npc:GetAttribute("DisplayName") or "NPC"
+	local hasStatus = status and status ~= "None" and status ~= ""
+
+	-- Update name label: keep fixed size and font
 	if nameLabel then
-		nameLabel.Size = UDim2.new(1, 0, 0.2, 0)
-		nameLabel.Position = UDim2.new(0, 0, 0, 0)
-		nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 		nameLabel.TextColor3 = rarityInfo.color
-		local displayName = npc:GetAttribute("DisplayName") or "NPC"
-		nameLabel.Text = ownerName
-			and (displayName .. " (" .. ownerName .. "'s)")
-			or displayName
+		nameLabel.Font = Enum.Font.GothamBlack
+		nameLabel.TextScaled = true -- Enable scaling
+		if ownerName then
+			nameLabel.Text = rarityInfo.displayText ~= ""
+				and (rarityInfo.displayText .. " " .. displayName .. " (" .. ownerName .. "'s)")
+				or (displayName .. " (" .. ownerName .. "'s)")
+		else
+			nameLabel.Text = rarityInfo.displayText ~= ""
+				and (rarityInfo.displayText .. " " .. displayName)
+				or displayName
+		end
 	end
 
-	local hasStatus = status and status ~= "None"
-
-	-- Always show status if NPC has one
-	if hasStatus then
-		if not statusLabel then
-			statusLabel = Instance.new("TextLabel")
-			statusLabel.Name = "StatusLabel"
-			statusLabel.Size = UDim2.new(1, 0, 0.2, 0)
-			statusLabel.Position = UDim2.new(0, 0, 0.2, 0)
-			statusLabel.BackgroundTransparency = 1
-			statusLabel.Font = Enum.Font.GothamBold
-			statusLabel.TextSize = 18
-			statusLabel.TextStrokeTransparency = 0
-			statusLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-			statusLabel.TextXAlignment = Enum.TextXAlignment.Center
-			statusLabel.Parent = container
-		end
-
-		for _, statusData in ipairs(NPCConfig.statuses) do
-			if statusData.name == status then
-				statusLabel.Text = statusData.displayText
-				statusLabel.TextColor3 = statusData.color
-				break
+	-- Update status label visibility and keep fixed formatting
+	if statusLabel then
+		statusLabel.Font = Enum.Font.GothamBlack
+		statusLabel.TextScaled = true -- Enable scaling
+		if hasStatus then
+			for _, statusData in ipairs(NPCConfig.statuses) do
+				if statusData.name == status then
+					statusLabel.Text = statusData.displayText
+					-- Rainbow status: animate label color
+					if statusData.isRainbow then
+						coroutine.wrap(function(lbl)
+							while lbl.Parent do
+								local t = tick()
+								local r = 0.5 + 0.5 * math.sin(t * 2)
+								local g = 0.5 + 0.5 * math.sin(t * 2 + 2)
+								local b = 0.5 + 0.5 * math.sin(t * 2 + 4)
+								lbl.TextColor3 = Color3.new(r, g, b)
+								wait(0.03)
+							end
+						end)(statusLabel)
+					else
+						statusLabel.TextColor3 = statusData.color
+					end
+					break
+				end
 			end
-		end
-	else
-		if statusLabel then
-			statusLabel:Destroy()
-		end
-	end
-
-	-- Price and CPS horizontal frame
-	if not priceCPSFrame then
-		priceCPSFrame = Instance.new("Frame")
-		priceCPSFrame.Name = "PriceCPSFrame"
-		priceCPSFrame.BackgroundTransparency = 1
-		priceCPSFrame.Size = UDim2.new(1, 0, 0.2, 0)
-		priceCPSFrame.Parent = container
-
-		local layout = Instance.new("UIListLayout")
-		layout.FillDirection = Enum.FillDirection.Horizontal
-		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		layout.VerticalAlignment = Enum.VerticalAlignment.Center
-		layout.SortOrder = Enum.SortOrder.LayoutOrder
-		layout.Parent = priceCPSFrame
-	end
-
-	-- Price label
-	local priceLabel = priceCPSFrame:FindFirstChild("PriceLabel")
-	if not priceLabel then
-		priceLabel = Instance.new("TextLabel")
-		priceLabel.Name = "PriceLabel"
-		priceLabel.Size = UDim2.new(0.5, 0, 1, 0)
-		priceLabel.BackgroundTransparency = 1
-		priceLabel.Font = Enum.Font.GothamBold
-		priceLabel.TextSize = 16
-		priceLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
-		priceLabel.TextStrokeTransparency = 0
-		priceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-		priceLabel.TextXAlignment = Enum.TextXAlignment.Left
-		priceLabel.LayoutOrder = 1
-		priceLabel.Parent = priceCPSFrame
-	end
-
-	-- CPS label
-	local cpsLabel = priceCPSFrame:FindFirstChild("CPSLabel")
-	if not cpsLabel then
-		cpsLabel = Instance.new("TextLabel")
-		cpsLabel.Name = "CPSLabel"
-		cpsLabel.Size = UDim2.new(0.5, 0, 1, 0)
-		cpsLabel.BackgroundTransparency = 1
-		cpsLabel.Font = Enum.Font.GothamBold
-		cpsLabel.TextSize = 16
-		cpsLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-		cpsLabel.TextStrokeTransparency = 0
-		cpsLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-		cpsLabel.TextXAlignment = Enum.TextXAlignment.Right
-		cpsLabel.LayoutOrder = 2
-		cpsLabel.Parent = priceCPSFrame
-	end
-
-	-- Position priceCPSFrame below status or name
-	priceCPSFrame.Position = hasStatus and UDim2.new(0, 0, 0.4, 0) or UDim2.new(0, 0, 0.2, 0)
-
-	local price = npc:GetAttribute("Price") or 100
-	local cps = 0
-	do
-		local NPCConfig = require(script.Parent.Parent.NPCConfig)
-		local brainrotTypeName = npc:GetAttribute("NPCType")
-		for _, t in ipairs(NPCConfig.brainrotTypes) do
-			if t.modelName == brainrotTypeName then
-				cps = t.coinsPerSecond or 0
-				break
-			end
+			statusLabel.Visible = true
+		else
+			statusLabel.Visible = false
 		end
 	end
 
-	-- Hide price/cps if owned
+	-- Make all info labels big and toggle price/spacer visibility
+	if priceLabel then
+		priceLabel.Font = Enum.Font.GothamBlack
+		priceLabel.TextScaled = true
+	end
+	if cpsLabel then
+		cpsLabel.Font = Enum.Font.GothamBlack
+		cpsLabel.TextScaled = true
+	end
+
+	-- Hide price and spacer when owned
 	if npc:GetAttribute("Owned") then
-		priceCPSFrame.Visible = false
+		if priceLabel then priceLabel.Visible = false end
+		if spacer then spacer.Visible = false end
+		if cpsLabel then cpsLabel.Visible = true end
 	else
-		priceLabel.Text = "$" .. price
-		cpsLabel.Text = "+ " .. cps .. "cps"
-		priceCPSFrame.Visible = true
+		if priceLabel then priceLabel.Visible = true end
+		if spacer then spacer.Visible = true end
+		if cpsLabel then cpsLabel.Visible = true end
 	end
 end
 
@@ -188,12 +145,10 @@ local function applyTypeEffect(player, npc)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return end
 
-	-- Get effect from NPC attributes
 	local walkSpeedBonus = npc:GetAttribute("Effect_WalkSpeedBonus") or 0
 	local jumpPowerBonus = npc:GetAttribute("Effect_JumpPowerBonus") or 0
 	local description = npc:GetAttribute("Effect_Description") or ""
 
-	-- Store original stats
 	if not player:GetAttribute("OriginalWalkSpeed") then
 		player:SetAttribute("OriginalWalkSpeed", humanoid.WalkSpeed)
 	end
@@ -201,26 +156,15 @@ local function applyTypeEffect(player, npc)
 		player:SetAttribute("OriginalJumpPower", humanoid.JumpPower)
 	end
 
-	-- Apply bonuses
 	humanoid.WalkSpeed = (player:GetAttribute("OriginalWalkSpeed") or 16) + walkSpeedBonus
 	humanoid.JumpPower = (player:GetAttribute("OriginalJumpPower") or 50) + jumpPowerBonus
 
 	player:SetAttribute("ActiveTypeEffect", description)
 	print(player.Name .. " gained effect: " .. description)
 
-	-- === COINS PER SECOND EFFECT ===
-	local NPCConfig = require(script.Parent.Parent.NPCConfig)
-	local brainrotTypeName = npc:GetAttribute("NPCType")
-	local brainrotType
-	for _, t in ipairs(NPCConfig.brainrotTypes) do
-		if t.modelName == brainrotTypeName then
-			brainrotType = t
-			break
-		end
-	end
-	local cps = (brainrotType and brainrotType.coinsPerSecond) or 0
+	-- When equipped, player does NOT get coins per second (coins only from contained unequipped NPCs)
 	if _G.CoinSystem then
-		_G.CoinSystem.SetCoinsPerSecond(player, cps)
+		_G.CoinSystem.SetCoinsPerSecond(player, 0)
 	end
 end
 
@@ -241,7 +185,7 @@ local function removeTypeEffect(player)
 	player:SetAttribute("ActiveTypeEffect", "")
 	print(player.Name .. " lost effect: " .. (activeEffect or "None"))
 
-	-- === REMOVE COINS PER SECOND EFFECT ===
+	-- Remove coins per second when unequipped (will be handled by NPC's container coin generation)
 	if _G.CoinSystem then
 		_G.CoinSystem.SetCoinsPerSecond(player, 0)
 	end
